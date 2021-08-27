@@ -1,0 +1,27 @@
+{
+    "manifest_version": 3,
+    "name": "Links crawler",
+    "description": "A tool to collect all links with custom query.",
+    "version": "1.0.0",
+    "background":{
+        "service_worker": "background-wrapper.js"
+    },
+    "icons":{
+        "16": "/images/logo_16.png",
+        "128":"/images/logo_128.png"
+    },
+    "action":{
+        "default_icon":{
+            "16": "/images/logo_16.png",
+            "128":"/images/logo_128.png"
+        }
+    },
+    "permissions":[
+        "tabs",
+        "scripting"
+    ],
+    "host_permissions":[
+        "https://*/*",
+        "http://*/*"
+    ]
+}
