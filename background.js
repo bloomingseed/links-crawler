@@ -14,7 +14,7 @@ function work(){
     let lastPageUrl = lastPageLink.firstElementChild.href;
     let pagesCount = lastPageUrl.substring(lastPageUrl.lastIndexOf('trang-')+'trang-'.length,lastPageUrl.lastIndexOf('/'));
     let prefix = lastPageUrl.substring(0,lastPageUrl.lastIndexOf('trang-'));
-    chrome.runtime.sendMessage({pagesCount,prefix});
+    chrome.runtime.sendMessage({type:"start",pagesCount,prefix});
 
 }
 function extensionClickListener(tab){
@@ -24,10 +24,7 @@ function extensionClickListener(tab){
       }, (granted) => {
         if (granted) {
             console.log('Origin permission granted');
-            chrome.scripting.executeScript({
-                target: {tabId: tab.id},
-                func:work
-            });
+            injectWorker(tab.id,work);
         }
       });
 }
@@ -37,12 +34,70 @@ async function createWindowTab(url){
 async function closeWindowTab(windowId){
     await chrome.windows.remove(windowId);
 }
-function onTabMessageListener(request, sender, respond){
-    let {pagesCount,prefix} = request;
-    console.log(pagesCount,prefix);
+function injectWorker(tabId, worker){
+    chrome.scripting.executeScript({
+        target: {tabId},
+        func:worker
+    });
+}
+function getLinks(){
+    let t = setInterval(()=>{
+        let ctner = document.querySelector('#list-chapter');
+        if(!ctner){
+            return;
+        }
+        if(!globalThis.locked){
+            globalThis.locked = true;
+            clearInterval(t);
+            let links = Array.from(document.querySelectorAll('ul.list-chapter > li > a')).map(elm=>elm.href);
+            chrome.runtime.sendMessage({type:"worker",links});
+        }
+    },100);
+}
+async function onTabMessageListener(request, sender, respond){
+    console.log('Received request: ',request, sender);
+    if(request.type=="start"){
+        let {pagesCount,prefix} = request;
+        console.log(pagesCount,prefix);
+        batchSize = 4;
+        globalThis.links = [];
+        let tabsList = globalThis.tabsList = {};
+        for(let i = 1; i<=pagesCount; i+=batchSize){
+            tasks = [];
+            for(let j = i; j<=Math.min(i+batchSize-1,pagesCount); ++j){
+                let wt = await createWindowTab(prefix+`/trang-${j}/`);
+                let tab = wt.tabs[0];
+                // injectWorker(tab.id,getLinks);
+                let resolver = null;
+                let p = new Promise(res=>resolver=()=>{
+                    closeWindowTab(wt.id);
+                    res();
+                });
+                tabsList[tab.id] = {"isDone":null,resolver};
+                tasks.push(p);
+            }
+            await Promise.all(tasks);
+        }
+        console.log(globalThis.links[0],globalThis.links.length);
+    } else if(request.type=="worker"){
+        globalThis.links.push(...request.links);
+        let target = globalThis.tabsList[sender.tab.id];
+        target.isDone = true;
+        target.resolver();
+
+    }
+    
+}
+function onTabUpdatedListener(tabId,changeInfo,tab){
+    let tabsList = globalThis.tabsList;
+    if(tabsList[tabId] && tabsList[tabId].isDone==null){
+        tabsList[tabId].isDone = false;
+        injectWorker(tabId,getLinks);
+    }
 }
 // REGISTERING EVENTS
 chrome.action.onClicked.addListener(extensionClickListener);
+chrome.tabs.onUpdated.addListener(onTabUpdatedListener);
 chrome.runtime.onMessage.addListener(function(req,s,res){
     if(s.tab){
         onTabMessageListener(req,s,res);
