@@ -18,7 +18,9 @@
     },
     "permissions":[
         "tabs",
-        "scripting"
+        "scripting",
+        "contextMenus",
+        "notifications"
     ],
     "host_permissions":[
         "https://*/*",

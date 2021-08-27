@@ -120,3 +120,15 @@ chrome.runtime.onMessage.addListener(function(req,s,res){
     }
     return true;
 });
+chrome.runtime.onInstalled.addListener(() => {
+    chrome.contextMenus.create({
+        id: 'linksCrawlerStart',
+        title: "Crawl", 
+        contexts:[ "all" ],
+    });
+});
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+    if ('linksCrawlerStart' === info.menuItemId) {
+        extensionClickListener(tab);
+    }
+});
