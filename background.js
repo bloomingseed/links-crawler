@@ -34,10 +34,11 @@ async function createWindowTab(url){
 async function closeWindowTab(windowId){
     await chrome.windows.remove(windowId);
 }
-function injectWorker(tabId, worker){
+function injectWorker(tabId, worker, argsArray){
     chrome.scripting.executeScript({
         target: {tabId},
-        func:worker
+        func:worker,
+        args:argsArray
     });
 }
 function getLinks(){
@@ -54,12 +55,26 @@ function getLinks(){
         }
     },100);
 }
+function printLinks(links){
+    let div = document.createElement('div');
+    div.style.position="fixed";
+    div.style.top='0px';
+    div.style.right='0px';
+    div.style.width='200px';
+    div.style.height='200px';
+    div.style.zIndex=1000;
+    document.body.appendChild(div);
+    let tarea = document.createElement('textarea');
+    div.appendChild(tarea);
+    tarea.innerHTML = links.join('\n');
+}
 async function onTabMessageListener(request, sender, respond){
     console.log('Received request: ',request, sender);
     if(request.type=="start"){
         let {pagesCount,prefix} = request;
         console.log(pagesCount,prefix);
         batchSize = 4;
+        globalThis.initTab = sender.tab.id;
         globalThis.links = [];
         let tabsList = globalThis.tabsList = {};
         for(let i = 1; i<=pagesCount; i+=batchSize){
@@ -79,6 +94,7 @@ async function onTabMessageListener(request, sender, respond){
             await Promise.all(tasks);
         }
         console.log(globalThis.links[0],globalThis.links.length);
+        injectWorker(globalThis.initTab,printLinks,[globalThis.links]);
     } else if(request.type=="worker"){
         globalThis.links.push(...request.links);
         let target = globalThis.tabsList[sender.tab.id];
